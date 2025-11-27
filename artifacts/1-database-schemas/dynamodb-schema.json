@@ -1,0 +1,163 @@
+{
+    "TableName": "RawAPIResponses",
+    "Description": "Stores raw API responses from social media platforms for audit and reprocessing",
+    "KeySchema": [
+        {
+            "AttributeName": "platform_user_id",
+            "KeyType": "HASH",
+            "Description": "Partition key: Unique user ID from the platform (e.g., Instagram user ID)"
+        },
+        {
+            "AttributeName": "scraped_timestamp",
+            "KeyType": "RANGE",
+            "Description": "Sort key: Unix timestamp when data was scraped"
+        }
+    ],
+    "AttributeDefinitions": [
+        {
+            "AttributeName": "platform_user_id",
+            "AttributeType": "S"
+        },
+        {
+            "AttributeName": "scraped_timestamp",
+            "AttributeType": "N"
+        },
+        {
+            "AttributeName": "platform",
+            "AttributeType": "S"
+        },
+        {
+            "AttributeName": "status",
+            "AttributeType": "S"
+        }
+    ],
+    "GlobalSecondaryIndexes": [
+        {
+            "IndexName": "PlatformIndex",
+            "KeySchema": [
+                {
+                    "AttributeName": "platform",
+                    "KeyType": "HASH"
+                },
+                {
+                    "AttributeName": "scraped_timestamp",
+                    "KeyType": "RANGE"
+                }
+            ],
+            "Projection": {
+                "ProjectionType": "ALL"
+            },
+            "Description": "Query all responses by platform and time range"
+        },
+        {
+            "IndexName": "StatusIndex",
+            "KeySchema": [
+                {
+                    "AttributeName": "status",
+                    "KeyType": "HASH"
+                },
+                {
+                    "AttributeName": "scraped_timestamp",
+                    "KeyType": "RANGE"
+                }
+            ],
+            "Projection": {
+                "ProjectionType": "KEYS_ONLY"
+            },
+            "Description": "Find failed/pending responses for retry"
+        }
+    ],
+    "BillingMode": "PAY_PER_REQUEST",
+    "Description": "On-demand pricing for unpredictable write patterns during backfills",
+    "StreamSpecification": {
+        "StreamEnabled": true,
+        "StreamViewType": "NEW_AND_OLD_IMAGES",
+        "Description": "Enable DynamoDB Streams to trigger Lambda for real-time processing"
+    },
+    "TimeToLiveSpecification": {
+        "Enabled": true,
+        "AttributeName": "ttl",
+        "Description": "Auto-delete raw responses after 90 days to save costs"
+    },
+    "PointInTimeRecoverySpecification": {
+        "PointInTimeRecoveryEnabled": true,
+        "Description": "Enable point-in-time recovery for disaster recovery"
+    },
+    "Tags": [
+        {
+            "Key": "Environment",
+            "Value": "Production"
+        },
+        {
+            "Key": "Application",
+            "Value": "InCreator-Ingestion"
+        },
+        {
+            "Key": "CostCenter",
+            "Value": "DataPipeline"
+        }
+    ],
+    "SampleItem": {
+        "platform_user_id": "instagram_123456789",
+        "scraped_timestamp": 1732694400,
+        "platform": "instagram",
+        "status": "success",
+        "raw_response": {
+            "user": {
+                "id": "123456789",
+                "username": "fitness_guru_india",
+                "full_name": "Fitness Guru",
+                "biography": "Personal trainer | Nutrition tips | DM for collabs",
+                "profile_pic_url": "https://...",
+                "follower_count": 500000,
+                "following_count": 1200,
+                "media_count": 850,
+                "is_verified": true,
+                "is_business_account": true,
+                "business_email": "contact@fitnessguru.com",
+                "external_url": "https://fitnessguru.com"
+            },
+            "recent_media": [
+                {
+                    "id": "post_123",
+                    "caption": "Morning workout routine 💪",
+                    "like_count": 15000,
+                    "comment_count": 450,
+                    "timestamp": 1732608000
+                }
+            ]
+        },
+        "api_version": "v1.0",
+        "scraper_version": "2.1.0",
+        "ttl": 1740470400,
+        "metadata": {
+            "request_duration_ms": 1250,
+            "rate_limit_remaining": 195,
+            "worker_id": "ecs-task-abc123"
+        }
+    },
+    "Notes": [
+        "Use DynamoDB Streams to trigger Lambda functions that parse and write to PostgreSQL",
+        "TTL set to 90 days (current_timestamp + 7776000 seconds)",
+        "Partition key ensures even distribution across partitions",
+        "GSI on platform allows querying all Instagram/YouTube/etc responses",
+        "On-demand billing handles spiky traffic during backfills",
+        "Consider switching to provisioned capacity once traffic stabilizes"
+    ],
+    "EstimatedCosts": {
+        "1M_creators_per_month": {
+            "writes": "1M writes × $1.25 per million = $1.25",
+            "reads": "100K reads × $0.25 per million = $0.025",
+            "storage": "10GB × $0.25 per GB = $2.50",
+            "streams": "$0.02 per 100K read request units = $0.20",
+            "total": "$3.98/month"
+        },
+        "50M_creators_per_month": {
+            "writes": "50M writes × $1.25 per million = $62.50",
+            "reads": "5M reads × $0.25 per million = $1.25",
+            "storage": "500GB × $0.25 per GB = $125",
+            "streams": "$0.02 per 100K read request units = $10",
+            "total": "$198.75/month"
+        }
+    }
+}

@@ -1,0 +1,740 @@
+openapi: 3.0.3
+info:
+  title: InCreator AI - Influencer Discovery API
+  description: |
+    RESTful API for discovering and searching influencers across Instagram, YouTube, TikTok, and Twitter.
+    
+    ## Features
+    - **Semantic Search**: AI-powered search using embeddings
+    - **Multi-Platform**: Query creators across all platforms
+    - **Advanced Filtering**: Filter by followers, engagement, niche, location
+    - **Identity Resolution**: Linked profiles across platforms
+    
+    ## Authentication
+    All endpoints require JWT authentication via `Authorization: Bearer <token>` header.
+    
+    ## Rate Limiting
+    - **Free Tier**: 100 requests/hour
+    - **Pro Tier**: 1,000 requests/hour
+    - **Enterprise**: Custom limits
+    
+  version: 1.0.0
+  contact:
+    name: InCreator AI Support
+    email: support@increator.ai
+    url: https://increator.ai
+  license:
+    name: MIT
+    url: https://opensource.org/licenses/MIT
+
+servers:
+  - url: https://api.increator.ai/v1
+    description: Production server
+  - url: https://staging-api.increator.ai/v1
+    description: Staging server
+  - url: http://localhost:3000/v1
+    description: Local development
+
+tags:
+  - name: Search
+    description: Search and discover influencers
+  - name: Creators
+    description: Creator profile management
+  - name: Analytics
+    description: Search analytics and insights
+  - name: Auth
+    description: Authentication endpoints
+
+paths:
+  # ==================== SEARCH ENDPOINTS ====================
+  
+  /search:
+    post:
+      tags:
+        - Search
+      summary: Search for influencers
+      description: |
+        Semantic search for influencers using AI-powered embeddings.
+        Supports keyword matching, filters, and ranking.
+      operationId: searchCreators
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SearchRequest'
+            examples:
+              basicSearch:
+                summary: Basic keyword search
+                value:
+                  query: "fitness influencers"
+                  limit: 20
+              advancedSearch:
+                summary: Advanced search with filters
+                value:
+                  query: "tech reviewers who unbox gadgets"
+                  filters:
+                    platforms: ["youtube", "instagram"]
+                    followers_min: 100000
+                    followers_max: 1000000
+                    engagement_rate_min: 3.0
+                    niches: ["technology", "gadgets"]
+                    countries: ["US", "IN"]
+                    verified_only: true
+                  sort_by: "engagement_rate"
+                  sort_order: "desc"
+                  page: 1
+                  limit: 50
+      responses:
+        '200':
+          description: Successful search
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SearchResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/RateLimitExceeded'
+  
+  /search/suggestions:
+    get:
+      tags:
+        - Search
+      summary: Get search suggestions
+      description: Autocomplete suggestions based on partial query
+      operationId: getSearchSuggestions
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: q
+          in: query
+          required: true
+          description: Partial search query
+          schema:
+            type: string
+            example: "fitness"
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 10
+            minimum: 1
+            maximum: 20
+      responses:
+        '200':
+          description: Suggestions returned
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  suggestions:
+                    type: array
+                    items:
+                      type: string
+                    example: ["fitness influencers", "fitness trainers", "fitness vloggers"]
+  
+  # ==================== CREATOR ENDPOINTS ====================
+  
+  /creators/{creatorId}:
+    get:
+      tags:
+        - Creators
+      summary: Get creator profile
+      description: Retrieve detailed profile for a specific creator
+      operationId: getCreator
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: creatorId
+          in: path
+          required: true
+          description: UUID of the creator
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Creator profile
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Creator'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  
+  /creators/{creatorId}/linked-profiles:
+    get:
+      tags:
+        - Creators
+      summary: Get linked profiles
+      description: Get all profiles linked to this creator across platforms
+      operationId: getLinkedProfiles
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: creatorId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Linked profiles
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  canonical_creator_id:
+                    type: string
+                    format: uuid
+                  linked_profiles:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/LinkedProfile'
+  
+  /creators/{creatorId}/content-samples:
+    get:
+      tags:
+        - Creators
+      summary: Get content samples
+      description: Retrieve recent posts from this creator
+      operationId: getContentSamples
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: creatorId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 10
+            minimum: 1
+            maximum: 50
+      responses:
+        '200':
+          description: Content samples
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  samples:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/ContentSample'
+  
+  /creators/batch:
+    post:
+      tags:
+        - Creators
+      summary: Get multiple creators
+      description: Retrieve profiles for multiple creators by IDs
+      operationId: getBatchCreators
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                creator_ids:
+                  type: array
+                  items:
+                    type: string
+                    format: uuid
+                  maxItems: 100
+      responses:
+        '200':
+          description: Creator profiles
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  creators:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Creator'
+  
+  # ==================== ANALYTICS ENDPOINTS ====================
+  
+  /analytics/trending-niches:
+    get:
+      tags:
+        - Analytics
+      summary: Get trending niches
+      description: Get top niches by creator count and growth
+      operationId: getTrendingNiches
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: platform
+          in: query
+          schema:
+            type: string
+            enum: [instagram, youtube, tiktok, twitter, all]
+            default: all
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 20
+      responses:
+        '200':
+          description: Trending niches
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  niches:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        niche:
+                          type: string
+                        creator_count:
+                          type: integer
+                        avg_followers:
+                          type: integer
+                        avg_engagement_rate:
+                          type: number
+                        growth_rate:
+                          type: number
+                          description: Percentage growth in last 30 days
+  
+  /analytics/search-history:
+    get:
+      tags:
+        - Analytics
+      summary: Get search history
+      description: Retrieve user's recent searches
+      operationId: getSearchHistory
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 20
+      responses:
+        '200':
+          description: Search history
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  searches:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        search_id:
+                          type: string
+                          format: uuid
+                        query:
+                          type: string
+                        filters:
+                          type: object
+                        results_count:
+                          type: integer
+                        created_at:
+                          type: string
+                          format: date-time
+  
+  # ==================== AUTH ENDPOINTS ====================
+  
+  /auth/login:
+    post:
+      tags:
+        - Auth
+      summary: User login
+      description: Authenticate user and return JWT token
+      operationId: login
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - email
+                - password
+              properties:
+                email:
+                  type: string
+                  format: email
+                password:
+                  type: string
+                  format: password
+      responses:
+        '200':
+          description: Login successful
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  access_token:
+                    type: string
+                  refresh_token:
+                    type: string
+                  expires_in:
+                    type: integer
+                    description: Token expiry in seconds
+                  user:
+                    $ref: '#/components/schemas/User'
+        '401':
+          description: Invalid credentials
+  
+  /auth/refresh:
+    post:
+      tags:
+        - Auth
+      summary: Refresh access token
+      description: Get new access token using refresh token
+      operationId: refreshToken
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - refresh_token
+              properties:
+                refresh_token:
+                  type: string
+      responses:
+        '200':
+          description: Token refreshed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  access_token:
+                    type: string
+                  expires_in:
+                    type: integer
+
+# ==================== COMPONENTS ====================
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  
+  schemas:
+    SearchRequest:
+      type: object
+      required:
+        - query
+      properties:
+        query:
+          type: string
+          description: Search query (supports natural language)
+          example: "fitness influencers in India"
+        filters:
+          type: object
+          properties:
+            platforms:
+              type: array
+              items:
+                type: string
+                enum: [instagram, youtube, tiktok, twitter]
+            followers_min:
+              type: integer
+              minimum: 0
+            followers_max:
+              type: integer
+            engagement_rate_min:
+              type: number
+              minimum: 0
+              maximum: 100
+            engagement_rate_max:
+              type: number
+            niches:
+              type: array
+              items:
+                type: string
+            countries:
+              type: array
+              items:
+                type: string
+                pattern: '^[A-Z]{2}$'
+                description: ISO 3166-1 alpha-2 country code
+            verified_only:
+              type: boolean
+              default: false
+        sort_by:
+          type: string
+          enum: [relevance, followers_count, engagement_rate, updated_at]
+          default: relevance
+        sort_order:
+          type: string
+          enum: [asc, desc]
+          default: desc
+        page:
+          type: integer
+          minimum: 1
+          default: 1
+        limit:
+          type: integer
+          minimum: 1
+          maximum: 100
+          default: 20
+    
+    SearchResponse:
+      type: object
+      properties:
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/SearchResult'
+        pagination:
+          type: object
+          properties:
+            page:
+              type: integer
+            limit:
+              type: integer
+            total_results:
+              type: integer
+            total_pages:
+              type: integer
+        metadata:
+          type: object
+          properties:
+            query:
+              type: string
+            latency_ms:
+              type: integer
+            cache_hit:
+              type: boolean
+    
+    SearchResult:
+      allOf:
+        - $ref: '#/components/schemas/Creator'
+        - type: object
+          properties:
+            relevance_score:
+              type: number
+              description: Relevance score (0-1)
+            match_reason:
+              type: string
+              description: Why this creator matched the query
+    
+    Creator:
+      type: object
+      properties:
+        creator_id:
+          type: string
+          format: uuid
+        platform:
+          type: string
+          enum: [instagram, youtube, tiktok, twitter]
+        platform_user_id:
+          type: string
+        username:
+          type: string
+        display_name:
+          type: string
+        bio:
+          type: string
+        profile_image_url:
+          type: string
+          format: uri
+        followers_count:
+          type: integer
+        following_count:
+          type: integer
+        posts_count:
+          type: integer
+        engagement_rate:
+          type: number
+        avg_views:
+          type: integer
+        avg_likes:
+          type: integer
+        avg_comments:
+          type: integer
+        primary_niche:
+          type: string
+        secondary_niches:
+          type: array
+          items:
+            type: string
+        content_themes:
+          type: array
+          items:
+            type: string
+        content_languages:
+          type: array
+          items:
+            type: string
+        audience_countries:
+          type: array
+          items:
+            type: string
+        verified:
+          type: boolean
+        is_business:
+          type: boolean
+        contact_email:
+          type: string
+          format: email
+        external_url:
+          type: string
+          format: uri
+        authenticity_score:
+          type: number
+        follower_quality_score:
+          type: number
+        updated_at:
+          type: string
+          format: date-time
+        last_scraped_at:
+          type: string
+          format: date-time
+    
+    LinkedProfile:
+      type: object
+      properties:
+        creator_id:
+          type: string
+          format: uuid
+        platform:
+          type: string
+        username:
+          type: string
+        followers_count:
+          type: integer
+        confidence_score:
+          type: number
+        resolution_method:
+          type: string
+    
+    ContentSample:
+      type: object
+      properties:
+        sample_id:
+          type: string
+          format: uuid
+        post_id:
+          type: string
+        post_type:
+          type: string
+        post_url:
+          type: string
+          format: uri
+        caption:
+          type: string
+        media_urls:
+          type: array
+          items:
+            type: string
+            format: uri
+        hashtags:
+          type: array
+          items:
+            type: string
+        likes_count:
+          type: integer
+        comments_count:
+          type: integer
+        views_count:
+          type: integer
+        posted_at:
+          type: string
+          format: date-time
+    
+    User:
+      type: object
+      properties:
+        user_id:
+          type: string
+          format: uuid
+        email:
+          type: string
+          format: email
+        name:
+          type: string
+        tier:
+          type: string
+          enum: [free, pro, enterprise]
+        created_at:
+          type: string
+          format: date-time
+  
+  responses:
+    BadRequest:
+      description: Invalid request parameters
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              error:
+                type: string
+                example: "Invalid query parameters"
+              details:
+                type: array
+                items:
+                  type: string
+    
+    Unauthorized:
+      description: Authentication required or token invalid
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              error:
+                type: string
+                example: "Invalid or expired token"
+    
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              error:
+                type: string
+                example: "Creator not found"
+    
+    RateLimitExceeded:
+      description: Rate limit exceeded
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              error:
+                type: string
+                example: "Rate limit exceeded"
+              retry_after:
+                type: integer
+                description: Seconds until rate limit resets
